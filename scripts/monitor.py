@@ -8,13 +8,16 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
 
 SYMBOLS = {
-    "^N225":    {"name": "日経平均",     "threshold": 1000, "unit": "円"},
-    "NKD=F":    {"name": "日経平均先物", "threshold": 1000, "unit": "pt"},
-    "USDJPY=X": {"name": "ドル円",       "threshold": 5,    "unit": "円"},
-    "^GSPC":    {"name": "S&P500",      "threshold": 500,  "unit": "ドル"},
+    "^N225":      {"name": "日経平均",     "threshold": 1000, "unit": "円"},
+    "NKD=F":      {"name": "日経平均先物", "threshold": 1000, "unit": "pt"},
+    "USDJPY=X":   {"name": "ドル円",       "threshold": 5,    "unit": "円"},
+    "^DJI":       {"name": "ダウ平均",     "threshold": 1000, "unit": "ドル"},
+    "^IXIC":      {"name": "ナスダック",   "threshold": 500,  "unit": "pt"},
+    "000001.SS":  {"name": "上海総合",     "threshold": 100,  "unit": "pt"},
 }
 
 # サーキットブレーカー設定
+# 上海はCB制度が2016年に停止されているため対象外
 CIRCUIT_BREAKERS = {
     "^N225": {
         "name": "日経平均",
@@ -34,9 +37,18 @@ CIRCUIT_BREAKERS = {
             {"pct": 10, "label": "第3段階（±10%）", "direction": "both"},
         ],
     },
-    "^GSPC": {
-        "name": "S&P500",
+    "^DJI": {
+        "name": "ダウ平均",
         "unit": "ドル",
+        "thresholds": [
+            {"pct": 7,  "label": "Level 1（-7%）",        "direction": "down"},
+            {"pct": 13, "label": "Level 2（-13%）",       "direction": "down"},
+            {"pct": 20, "label": "Level 3（-20%）終日停止", "direction": "down"},
+        ],
+    },
+    "^IXIC": {
+        "name": "ナスダック",
+        "unit": "pt",
         "thresholds": [
             {"pct": 7,  "label": "Level 1（-7%）",        "direction": "down"},
             {"pct": 13, "label": "Level 2（-13%）",       "direction": "down"},
