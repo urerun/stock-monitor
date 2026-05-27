@@ -5,6 +5,9 @@ on:
     - cron: '*/15 * * * *'  # 15分毎
   workflow_dispatch:          # 手動実行（テスト用）
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
