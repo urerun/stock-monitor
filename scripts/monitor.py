@@ -38,11 +38,21 @@ CIRCUIT_BREAKERS = {
         "name": "S&P500",
         "unit": "ドル",
         "thresholds": [
-            {"pct": 7,  "label": "Level 1（-7%）",  "direction": "down"},
-            {"pct": 13, "label": "Level 2（-13%）", "direction": "down"},
+            {"pct": 7,  "label": "Level 1（-7%）",        "direction": "down"},
+            {"pct": 13, "label": "Level 2（-13%）",       "direction": "down"},
             {"pct": 20, "label": "Level 3（-20%）終日停止", "direction": "down"},
         ],
     },
+}
+
+# 大台設定（日経平均）
+MILESTONES = {
+    "^N225": {"name": "日経平均", "unit": "円", "levels": [50000, 60000]},
+}
+
+# 日中値幅設定（日経平均）
+INTRADAY_RANGES = {
+    "^N225": {"name": "日経平均", "unit": "円", "thresholds": [1000, 2000, 3000]},
 }
 
 STATE_FILE = "state/state.json"
@@ -57,13 +67,7 @@ def is_tse_open():
     return (0 <= m < 150) or (210 <= m < 390)
 
 
-def active_nikkei_symbol():
-    """東証営業中は現物、時間外は先物を返す"""
-    return "^N225" if is_tse_open() else "NKD=F"
-
-
 def skip_symbol(symbol):
-    """現在時刻に応じて不要な日経シンボルをスキップ"""
     if symbol == "^N225" and not is_tse_open():
         return True
     if symbol == "NKD=F" and is_tse_open():
@@ -100,6 +104,14 @@ def get_prev_close(symbol):
     return float(data["Close"].iloc[-2])
 
 
+def get_today_hl(symbol):
+    ticker = yf.Ticker(symbol)
+    data = ticker.history(period="1d", interval="1d")
+    if data.empty:
+        return None, None
+    return float(data["High"].iloc[-1]), float(data["Low"].iloc[-1])
+
+
 def get_band(price, threshold):
     return math.floor(price / threshold) * threshold
 
@@ -113,26 +125,6 @@ def should_notify(state, key):
 
 def update_state(state, key):
     state[key] = datetime.now(timezone.utc).isoformat()
-
-
-def build_price_message(config, price, band):
-    now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
-    direction = "上抜け" if price >= band + config["threshold"] / 2 else "下抜け"
-    return (
-        f"【{config['name']}アラート】"
-        f"{band:,.0f}{config['unit']}を{direction}。"
-        f"現在値：{price:,.2f}{config['unit']}（{now} JST）"
-    )
-
-
-def build_cb_message(config, label, pct, price):
-    now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
-    direction = "上昇" if pct > 0 else "下落"
-    return (
-        f"【CB警告】{config['name']} {label}発動の可能性。"
-        f"前日比{pct:+.1f}%（{direction}）"
-        f"現在値：{price:,.0f}{config['unit']}（{now} JST）"
-    )
 
 
 def send_email(subject, body):
@@ -168,7 +160,13 @@ def check_price_alerts(state):
 
             key = f"{symbol}_{band}"
             if should_notify(state, key):
-                body = build_price_message(config, price, band)
+                now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
+                direction = "上抜け" if price >= band + config["threshold"] / 2 else "下抜け"
+                body = (
+                    f"【{config['name']}アラート】"
+                    f"{band:,.0f}{config['unit']}を{direction}。"
+                    f"現在値：{price:,.2f}{config['unit']}（{now} JST）"
+                )
                 subject = f"【価格アラート】{config['name']} {band:,.0f}{config['unit']}帯"
                 send_email(subject, body)
                 update_state(state, key)
@@ -205,7 +203,13 @@ def check_circuit_breakers(state):
                 if triggered:
                     key = f"cb_{symbol}_{thresh['pct']}"
                     if should_notify(state, key):
-                        body = build_cb_message(config, thresh["label"], pct, price)
+                        now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
+                        direction = "上昇" if pct > 0 else "下落"
+                        body = (
+                            f"【CB警告】{config['name']} {thresh['label']}発動の可能性。"
+                            f"前日比{pct:+.1f}%（{direction}）"
+                            f"現在値：{price:,.0f}{config['unit']}（{now} JST）"
+                        )
                         subject = f"【CB警告】{config['name']} {thresh['label']}"
                         send_email(subject, body)
                         update_state(state, key)
@@ -218,15 +222,85 @@ def check_circuit_breakers(state):
     return notified
 
 
+def check_milestones(state):
+    notified = False
+    for symbol, config in MILESTONES.items():
+        if skip_symbol(symbol):
+            continue
+        try:
+            price = get_price(symbol)
+            if price is None:
+                continue
+
+            for level in config["levels"]:
+                if price >= level:
+                    key = f"milestone_{symbol}_{level}"
+                    if should_notify(state, key):
+                        now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
+                        body = (
+                            f"【大台突破】{config['name']}が{level:,}{config['unit']}を突破！"
+                            f"現在値：{price:,.0f}{config['unit']}（{now} JST）"
+                        )
+                        subject = f"【大台突破】{config['name']} {level:,}{config['unit']}突破"
+                        send_email(subject, body)
+                        update_state(state, key)
+                        print(f"[SENT] {body}")
+                        notified = True
+
+        except Exception as e:
+            print(f"[ERROR] milestone {symbol}: {e}")
+
+    return notified
+
+
+def check_intraday_range(state):
+    notified = False
+    today = datetime.now(JST).strftime("%Y-%m-%d")
+
+    for symbol, config in INTRADAY_RANGES.items():
+        if not is_tse_open():
+            continue
+        try:
+            high, low = get_today_hl(symbol)
+            if high is None:
+                continue
+
+            range_val = high - low
+            print(f"[INFO] 日中値幅 {config['name']}: {range_val:,.0f}{config['unit']} (H:{high:,.0f} L:{low:,.0f})")
+
+            for thresh in config["thresholds"]:
+                if range_val >= thresh:
+                    key = f"range_{symbol}_{thresh}_{today}"
+                    if should_notify(state, key):
+                        now = datetime.now(JST).strftime("%H:%M")
+                        body = (
+                            f"【値幅アラート】{config['name']}の日中値幅が{thresh:,}{config['unit']}超え。"
+                            f"高値{high:,.0f}／安値{low:,.0f}（値幅{range_val:,.0f}{config['unit']}）"
+                            f"（{now} JST）"
+                        )
+                        subject = f"【値幅アラート】{config['name']} 日中値幅{thresh:,}{config['unit']}超え"
+                        send_email(subject, body)
+                        update_state(state, key)
+                        print(f"[SENT] {body}")
+                        notified = True
+
+        except Exception as e:
+            print(f"[ERROR] range {symbol}: {e}")
+
+    return notified
+
+
 def main():
     state = load_state()
 
     a = check_price_alerts(state)
     b = check_circuit_breakers(state)
+    c = check_milestones(state)
+    d = check_intraday_range(state)
 
     save_state(state)
 
-    if not a and not b:
+    if not any([a, b, c, d]):
         print("[INFO] アラートなし")
 
 
