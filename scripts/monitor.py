@@ -160,7 +160,7 @@ def send_email(subject, body):
 
 
 def dispatch_to_x_money(alert_type, payload):
-    token = os.environ.get("GITHUB_PAT")
+    token = os.environ.get("GH_PAT")
     if not token:
         print("[SKIP] GITHUB_PAT未設定")
         return
