@@ -257,29 +257,56 @@ def check_milestones(state):
 def check_intraday_range(state):
     notified = False
     today = datetime.now(JST).strftime("%Y-%m-%d")
+    tse_open = is_tse_open()
 
     for symbol, config in INTRADAY_RANGES.items():
-        if not is_tse_open():
-            continue
         try:
-            high, low = get_today_hl(symbol)
-            if high is None:
-                continue
+            if tse_open:
+                # 現物セッション: 当日の高値−安値
+                high, low = get_today_hl(symbol)
+                if high is None:
+                    continue
+                range_val = high - low
+                range_desc = f"高値{high:,.0f}／安値{low:,.0f}"
+                session = "現物"
+                suffix = "cash"
 
-            range_val = high - low
-            print(f"[INFO] 日中値幅 {config['name']}: {range_val:,.0f}{config['unit']} (H:{high:,.0f} L:{low:,.0f})")
+            else:
+                # 先物セッション: 東証クローズ後の初回価格を基準とする
+                futures_sym = "NKD=F"
+                base_key = f"futures_base_{futures_sym}_{today}"
+
+                if base_key not in state or not isinstance(state[base_key], (int, float)):
+                    base = get_price(futures_sym)
+                    if base is None:
+                        continue
+                    state[base_key] = base
+                    print(f"[INFO] 先物基準価格を記録: {base:,.0f}pt")
+                    continue  # 初回は基準設定のみ
+
+                base = float(state[base_key])
+                current = get_price(futures_sym)
+                if current is None:
+                    continue
+                range_val = abs(current - base)
+                diff = current - base
+                range_desc = f"基準{base:,.0f}→現在{current:,.0f}（{diff:+,.0f}pt）"
+                session = "先物"
+                suffix = "futures"
+
+            print(f"[INFO] 値幅 {config['name']}（{session}）: {range_val:,.0f}{config['unit']}")
 
             for thresh in config["thresholds"]:
                 if range_val >= thresh:
-                    key = f"range_{symbol}_{thresh}_{today}"
+                    key = f"range_{symbol}_{thresh}_{today}_{suffix}"
                     if should_notify(state, key):
                         now = datetime.now(JST).strftime("%H:%M")
                         body = (
-                            f"【値幅アラート】{config['name']}の日中値幅が{thresh:,}{config['unit']}超え。"
-                            f"高値{high:,.0f}／安値{low:,.0f}（値幅{range_val:,.0f}{config['unit']}）"
+                            f"【値幅アラート】{config['name']}（{session}）の値幅が{thresh:,}{config['unit']}超え。"
+                            f"{range_desc}（値幅{range_val:,.0f}{config['unit']}）"
                             f"（{now} JST）"
                         )
-                        subject = f"【値幅アラート】{config['name']} 日中値幅{thresh:,}{config['unit']}超え"
+                        subject = f"【値幅アラート】{config['name']}（{session}） 値幅{thresh:,}{config['unit']}超え"
                         send_email(subject, body)
                         update_state(state, key)
                         print(f"[SENT] {body}")
