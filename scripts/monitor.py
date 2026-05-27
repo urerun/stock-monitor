@@ -45,9 +45,9 @@ CIRCUIT_BREAKERS = {
     },
 }
 
-# 大台設定（日経平均）
+# 大台設定（10,000円単位のキリ番を動的に検出）
 MILESTONES = {
-    "^N225": {"name": "日経平均", "unit": "円", "levels": [50000, 60000]},
+    "^N225": {"name": "日経平均", "unit": "円", "threshold": 10000},
 }
 
 # 日中値幅設定（日経平均）
@@ -232,20 +232,21 @@ def check_milestones(state):
             if price is None:
                 continue
 
-            for level in config["levels"]:
-                if price >= level:
-                    key = f"milestone_{symbol}_{level}"
-                    if should_notify(state, key):
-                        now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
-                        body = (
-                            f"【大台突破】{config['name']}が{level:,}{config['unit']}を突破！"
-                            f"現在値：{price:,.0f}{config['unit']}（{now} JST）"
-                        )
-                        subject = f"【大台突破】{config['name']} {level:,}{config['unit']}突破"
-                        send_email(subject, body)
-                        update_state(state, key)
-                        print(f"[SENT] {body}")
-                        notified = True
+            level = get_band(price, config["threshold"])
+            print(f"[INFO] 大台チェック {config['name']}: {price:,.0f} (大台={level:,})")
+
+            key = f"milestone_{symbol}_{level}"
+            if should_notify(state, key):
+                now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
+                body = (
+                    f"【大台突破】{config['name']}が{level:,}{config['unit']}台に到達！"
+                    f"現在値：{price:,.0f}{config['unit']}（{now} JST）"
+                )
+                subject = f"【大台突破】{config['name']} {level:,}{config['unit']}台"
+                send_email(subject, body)
+                update_state(state, key)
+                print(f"[SENT] {body}")
+                notified = True
 
         except Exception as e:
             print(f"[ERROR] milestone {symbol}: {e}")
