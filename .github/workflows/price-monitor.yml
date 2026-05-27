@@ -2,7 +2,7 @@ name: Price Monitor
 
 on:
   schedule:
-    - cron: '*/15 0-6,13-21 * * 1-5'  # 平日のみ・東京+NY市場時間帯（UTC）
+    - cron: '*/15 * * * 1-5'  # 平日24時間
   workflow_dispatch:          # 手動実行（テスト用）
 
 env:
