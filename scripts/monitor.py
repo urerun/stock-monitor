@@ -57,14 +57,17 @@ CIRCUIT_BREAKERS = {
     },
 }
 
-# 大台設定（10,000円単位のキリ番を動的に検出）
+# 大台設定
 MILESTONES = {
-    "^N225": {"name": "日経平均", "unit": "円", "threshold": 10000},
+    "^N225":    {"name": "日経平均", "unit": "円", "threshold": 10000},
+    "USDJPY=X": {"name": "ドル円",   "unit": "円", "threshold": 10},
 }
 
-# 日中値幅設定（日経平均）
+# 日中値幅設定
+# futures_switch=True の銘柄は現物/先物で基準価格を切り替える
 INTRADAY_RANGES = {
-    "^N225": {"name": "日経平均", "unit": "円", "thresholds": [1000, 2000, 3000]},
+    "^N225":    {"name": "日経平均", "unit": "円", "thresholds": [1000, 2000, 3000], "futures_switch": True},
+    "USDJPY=X": {"name": "ドル円",   "unit": "円", "thresholds": [1],               "futures_switch": False},
 }
 
 STATE_FILE = "state/state.json"
@@ -273,17 +276,7 @@ def check_intraday_range(state):
 
     for symbol, config in INTRADAY_RANGES.items():
         try:
-            if tse_open:
-                # 現物セッション: 当日の高値−安値
-                high, low = get_today_hl(symbol)
-                if high is None:
-                    continue
-                range_val = high - low
-                range_desc = f"高値{high:,.0f}／安値{low:,.0f}"
-                session = "現物"
-                suffix = "cash"
-
-            else:
+            if config.get("futures_switch") and not tse_open:
                 # 先物セッション: 東証クローズ後の初回価格を基準とする
                 futures_sym = "NKD=F"
                 base_key = f"futures_base_{futures_sym}_{today}"
@@ -306,7 +299,18 @@ def check_intraday_range(state):
                 session = "先物"
                 suffix = "futures"
 
-            print(f"[INFO] 値幅 {config['name']}（{session}）: {range_val:,.0f}{config['unit']}")
+            else:
+                # 当日の高値−安値（現物・為替共通）
+                high, low = get_today_hl(symbol)
+                if high is None:
+                    continue
+                range_val = high - low
+                range_desc = f"高値{high:,.2f}／安値{low:,.2f}"
+                session = "現物" if config.get("futures_switch") else ""
+                suffix = "cash"
+
+            label = f"（{session}）" if session else ""
+            print(f"[INFO] 値幅 {config['name']}{label}: {range_val:,.2f}{config['unit']}")
 
             for thresh in config["thresholds"]:
                 if range_val >= thresh:
@@ -314,11 +318,11 @@ def check_intraday_range(state):
                     if should_notify(state, key):
                         now = datetime.now(JST).strftime("%H:%M")
                         body = (
-                            f"【値幅アラート】{config['name']}（{session}）の値幅が{thresh:,}{config['unit']}超え。"
-                            f"{range_desc}（値幅{range_val:,.0f}{config['unit']}）"
+                            f"【値幅アラート】{config['name']}{label}の値幅が{thresh:,}{config['unit']}超え。"
+                            f"{range_desc}（値幅{range_val:,.2f}{config['unit']}）"
                             f"（{now} JST）"
                         )
-                        subject = f"【値幅アラート】{config['name']}（{session}） 値幅{thresh:,}{config['unit']}超え"
+                        subject = f"【値幅アラート】{config['name']}{label} 値幅{thresh:,}{config['unit']}超え"
                         send_email(subject, body)
                         update_state(state, key)
                         print(f"[SENT] {body}")
