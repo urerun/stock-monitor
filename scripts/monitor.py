@@ -8,19 +8,29 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
 
 SYMBOLS = {
-    "^N225":    {"name": "日経平均",  "threshold": 1000, "unit": "円"},
-    "USDJPY=X": {"name": "ドル円",    "threshold": 5,    "unit": "円"},
-    "^GSPC":    {"name": "S&P500",   "threshold": 500,  "unit": "ドル"},
+    "^N225":    {"name": "日経平均",     "threshold": 1000, "unit": "円"},
+    "NKD=F":    {"name": "日経平均先物", "threshold": 1000, "unit": "pt"},
+    "USDJPY=X": {"name": "ドル円",       "threshold": 5,    "unit": "円"},
+    "^GSPC":    {"name": "S&P500",      "threshold": 500,  "unit": "ドル"},
 }
 
 # サーキットブレーカー設定
 CIRCUIT_BREAKERS = {
     "^N225": {
-        "name": "日経平均先物",
+        "name": "日経平均",
         "unit": "円",
         "thresholds": [
-            {"pct": 8,  "label": "第1段階（±8%）", "direction": "both"},
-            {"pct": 9,  "label": "第2段階（±9%）", "direction": "both"},
+            {"pct": 8,  "label": "第1段階（±8%）",  "direction": "both"},
+            {"pct": 9,  "label": "第2段階（±9%）",  "direction": "both"},
+            {"pct": 10, "label": "第3段階（±10%）", "direction": "both"},
+        ],
+    },
+    "NKD=F": {
+        "name": "日経平均先物",
+        "unit": "pt",
+        "thresholds": [
+            {"pct": 8,  "label": "第1段階（±8%）",  "direction": "both"},
+            {"pct": 9,  "label": "第2段階（±9%）",  "direction": "both"},
             {"pct": 10, "label": "第3段階（±10%）", "direction": "both"},
         ],
     },
