@@ -48,6 +48,28 @@ CIRCUIT_BREAKERS = {
 STATE_FILE = "state/state.json"
 JST = timezone(timedelta(hours=9))
 
+# 東証取引時間（UTC）
+# 前場: 9:00-11:30 JST = 0:00-2:30 UTC
+# 後場: 12:30-15:30 JST = 3:30-6:30 UTC
+def is_tse_open():
+    t = datetime.now(timezone.utc)
+    m = t.hour * 60 + t.minute
+    return (0 <= m < 150) or (210 <= m < 390)
+
+
+def active_nikkei_symbol():
+    """東証営業中は現物、時間外は先物を返す"""
+    return "^N225" if is_tse_open() else "NKD=F"
+
+
+def skip_symbol(symbol):
+    """現在時刻に応じて不要な日経シンボルをスキップ"""
+    if symbol == "^N225" and not is_tse_open():
+        return True
+    if symbol == "NKD=F" and is_tse_open():
+        return True
+    return False
+
 
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -132,6 +154,9 @@ def send_email(subject, body):
 def check_price_alerts(state):
     notified = False
     for symbol, config in SYMBOLS.items():
+        if skip_symbol(symbol):
+            print(f"[SKIP] {config['name']}: 時間外")
+            continue
         try:
             price = get_price(symbol)
             if price is None:
@@ -159,6 +184,8 @@ def check_price_alerts(state):
 def check_circuit_breakers(state):
     notified = False
     for symbol, config in CIRCUIT_BREAKERS.items():
+        if skip_symbol(symbol):
+            continue
         try:
             price = get_price(symbol)
             prev_close = get_prev_close(symbol)
