@@ -3,7 +3,6 @@ import json
 import os
 import smtplib
 import math
-import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
@@ -159,30 +158,6 @@ def send_email(subject, body):
         server.send_message(msg)
 
 
-def dispatch_to_x_money(alert_type, payload):
-    token = os.environ.get("GH_PAT")
-    if not token:
-        print("[SKIP] GITHUB_PAT未設定")
-        return
-
-    url = "https://api.github.com/repos/urerun/X_money/dispatches"
-    resp = requests.post(
-        url,
-        json={"event_type": "price_alert", "client_payload": {"type": alert_type, **payload}},
-        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"},
-    )
-    if resp.status_code == 204:
-        print(f"[INFO] X_money dispatch送信: {alert_type}")
-    else:
-        print(f"[ERROR] dispatch失敗: {resp.status_code}")
-
-
-def notify(subject, body, alert_type, payload):
-    send_email(subject, body)
-    try:
-        dispatch_to_x_money(alert_type, payload)
-    except Exception as e:
-        print(f"[ERROR] dispatch失敗: {e}")
 
 
 def check_price_alerts(state):
@@ -210,9 +185,7 @@ def check_price_alerts(state):
                     f"現在値：{price:,.2f}{config['unit']}（{now} JST）"
                 )
                 subject = f"【価格アラート】{config['name']} {band:,.0f}{config['unit']}帯"
-                payload = {"name": config["name"], "unit": config["unit"],
-                           "price": price, "band": band, "direction": direction, "time": now}
-                notify(subject, body, "price_band", payload)
+                send_email(subject, body)
                 update_state(state, key)
                 print(f"[SENT] {body}")
                 notified = True
@@ -255,10 +228,7 @@ def check_circuit_breakers(state):
                             f"現在値：{price:,.0f}{config['unit']}（{now} JST）"
                         )
                         subject = f"【CB警告】{config['name']} {thresh['label']}"
-                        payload = {"name": config["name"], "unit": config["unit"],
-                                   "label": thresh["label"], "pct": round(pct, 1),
-                                   "direction": direction, "price": price, "time": now}
-                        notify(subject, body, "circuit_breaker", payload)
+                        send_email(subject, body)
                         update_state(state, key)
                         print(f"[SENT] {body}")
                         notified = True
@@ -290,9 +260,7 @@ def check_milestones(state):
                     f"現在値：{price:,.0f}{config['unit']}（{now} JST）"
                 )
                 subject = f"【大台突破】{config['name']} {level:,}{config['unit']}台"
-                payload = {"name": config["name"], "unit": config["unit"],
-                           "level": level, "price": price, "time": now}
-                notify(subject, body, "milestone", payload)
+                send_email(subject, body)
                 update_state(state, key)
                 print(f"[SENT] {body}")
                 notified = True
@@ -355,11 +323,7 @@ def check_intraday_range(state):
                             f"（{now} JST）"
                         )
                         subject = f"【値幅アラート】{config['name']}{label} 値幅{thresh:,}{config['unit']}超え"
-                        payload = {"name": config["name"], "unit": config["unit"],
-                                   "label": label, "thresh": thresh,
-                                   "range_val": round(range_val, 2),
-                                   "range_desc": range_desc, "time": now}
-                        notify(subject, body, "intraday_range", payload)
+                        send_email(subject, body)
                         update_state(state, key)
                         print(f"[SENT] {body}")
                         notified = True
