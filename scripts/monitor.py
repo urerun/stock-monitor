@@ -162,6 +162,7 @@ def send_email(subject, body):
 
 def check_price_alerts(state):
     notified = False
+    fetch_errors = []
     today = datetime.now(JST).strftime("%Y-%m-%d")
 
     for symbol, config in SYMBOLS.items():
@@ -173,6 +174,7 @@ def check_price_alerts(state):
             prev_close = get_prev_close(symbol)
             if price is None or prev_close is None:
                 print(f"[SKIP] {symbol}: データ取得失敗")
+                fetch_errors.append(config["name"])
                 continue
 
             delta = price - prev_close
@@ -201,8 +203,31 @@ def check_price_alerts(state):
 
         except Exception as e:
             print(f"[ERROR] {symbol}: {e}")
+            fetch_errors.append(config["name"])
 
-    return notified
+    return notified, fetch_errors
+
+
+def notify_fetch_errors(state, fetch_errors):
+    if not fetch_errors:
+        return
+    key = f"fetch_error_{datetime.now(JST).strftime('%Y-%m-%d_%H')}"
+    if key in state:
+        return
+    now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
+    body = (
+        f"【監視エラー】以下のシンボルのデータ取得に失敗しました。\n\n"
+        + "\n".join(f"  ・{e}" for e in fetch_errors)
+        + f"\n\n（{now} JST）\n"
+        "GitHub Actions の logs/ フォルダを確認してください。"
+    )
+    subject = f"【監視エラー】データ取得失敗 {len(fetch_errors)}件"
+    try:
+        send_email(subject, body)
+        state[key] = datetime.now(timezone.utc).isoformat()
+        print(f"[SENT] エラーメール: {fetch_errors}")
+    except Exception as e:
+        print(f"[ERROR] エラーメール送信失敗: {e}")
 
 
 def check_circuit_breakers(state):
@@ -346,10 +371,12 @@ def check_intraday_range(state):
 def main():
     state = load_state()
 
-    a = check_price_alerts(state)
+    a, fetch_errors = check_price_alerts(state)
     b = check_circuit_breakers(state)
     c = check_milestones(state)
     d = check_intraday_range(state)
+
+    notify_fetch_errors(state, fetch_errors)
 
     save_state(state)
 
