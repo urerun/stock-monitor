@@ -162,33 +162,42 @@ def send_email(subject, body):
 
 def check_price_alerts(state):
     notified = False
+    today = datetime.now(JST).strftime("%Y-%m-%d")
+
     for symbol, config in SYMBOLS.items():
         if skip_symbol(symbol):
             print(f"[SKIP] {config['name']}: 時間外")
             continue
         try:
             price = get_price(symbol)
-            if price is None:
+            prev_close = get_prev_close(symbol)
+            if price is None or prev_close is None:
                 print(f"[SKIP] {symbol}: データ取得失敗")
                 continue
 
-            band = get_band(price, config["threshold"])
-            print(f"[INFO] {config['name']}: {price:,.2f} (band={band:,.0f})")
+            delta = price - prev_close
+            abs_delta = abs(delta)
+            sign = "down" if delta < 0 else "up"
+            sign_label = "下落" if delta < 0 else "上昇"
 
-            key = f"{symbol}_{band}"
-            if should_notify(state, key):
-                now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
-                direction = "上抜け" if price >= band + config["threshold"] / 2 else "下抜け"
-                body = (
-                    f"【{config['name']}アラート】"
-                    f"{band:,.0f}{config['unit']}を{direction}。"
-                    f"現在値：{price:,.2f}{config['unit']}（{now} JST）"
-                )
-                subject = f"【価格アラート】{config['name']} {band:,.0f}{config['unit']}帯"
-                send_email(subject, body)
-                update_state(state, key)
-                print(f"[SENT] {body}")
-                notified = True
+            print(f"[INFO] {config['name']}: {price:,.2f} (前日比{delta:+,.2f}{config['unit']})")
+
+            steps = int(abs_delta / config["threshold"])
+            for i in range(1, steps + 1):
+                step_val = config["threshold"] * i
+                key = f"delta_{symbol}_{sign}_{step_val}_{today}"
+                if key not in state:
+                    now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
+                    body = (
+                        f"【{config['name']}アラート】"
+                        f"前日終値比{delta:+,.0f}{config['unit']}（{sign_label}{step_val:,}{config['unit']}超え）。"
+                        f"現在値：{price:,.2f}{config['unit']}（{now} JST）"
+                    )
+                    subject = f"【価格アラート】{config['name']} 前日比{delta:+,.0f}{config['unit']}"
+                    send_email(subject, body)
+                    state[key] = datetime.now(timezone.utc).isoformat()
+                    print(f"[SENT] {body}")
+                    notified = True
 
         except Exception as e:
             print(f"[ERROR] {symbol}: {e}")
