@@ -57,11 +57,6 @@ CIRCUIT_BREAKERS = {
     },
 }
 
-# 大台設定（ドル円は価格アラートのバンド越えで対応するため除外）
-MILESTONES = {
-    "^N225": {"name": "日経平均", "unit": "円", "threshold": 10000},
-}
-
 # 日中値幅設定
 # futures_switch=True の銘柄は現物/先物で基準価格を切り替える
 INTRADAY_RANGES = {
@@ -157,11 +152,21 @@ def send_email(subject, body):
         server.send_message(msg)
 
 
+def _fmt_price(price, symbol, config):
+    if symbol == "USDJPY=X":
+        return f"{price:.2f}{config['unit']}"
+    return f"{price:,.0f}{config['unit']}"
+
+
+def _fmt_delta(delta, symbol, config):
+    if symbol == "USDJPY=X":
+        return f"前日比{delta:+.2f}{config['unit']}"
+    return f"前日比{delta:+,.0f}{config['unit']}"
 
 
 def check_price_alerts(state):
-    """バンド越えアラート：前回と異なるバンドに入ったら方向付きで通知"""
-    notified = False
+    """バンド越えアラート: 現在値と前日比を1行に統合して返す"""
+    msgs = []
     fetch_errors = []
 
     for symbol, config in SYMBOLS.items():
@@ -175,17 +180,24 @@ def check_price_alerts(state):
                 fetch_errors.append(config["name"])
                 continue
 
+            prev_close = get_prev_close(symbol)
             current_band = get_band(price, config["threshold"])
             prev_key = f"band_prev_{symbol}"
             prev_band = state.get(prev_key)
 
-            print(f"[INFO] {config['name']}: {price:,.0f}{config['unit']} (band={current_band:,.0f})")
+            price_str = _fmt_price(price, symbol, config)
+            if prev_close is not None:
+                delta = price - prev_close
+                tail = f" → {price_str}（{_fmt_delta(delta, symbol, config)}）"
+                print(f"[INFO] {config['name']}: {price_str} ({_fmt_delta(delta, symbol, config)})")
+            else:
+                tail = f" → {price_str}"
+                print(f"[INFO] {config['name']}: {price_str}")
 
             if prev_band is not None and current_band != prev_band:
                 direction_up = current_band > prev_band
                 step = config["threshold"]
 
-                # 複数バンドを一度にまたいだ場合は全レベルで通知
                 if direction_up:
                     crossed_levels = range(int(prev_band) + step, int(current_band) + 1, step)
                 else:
@@ -193,19 +205,14 @@ def check_price_alerts(state):
 
                 for crossed in crossed_levels:
                     if symbol == "USDJPY=X":
-                        if direction_up:
-                            subject = f"【価格アラート】{config['name']} {crossed:,.0f}{config['unit']}にタッチ"
-                        else:
-                            subject = f"【価格アラート】{config['name']} {crossed:,.0f}{config['unit']}割れ"
+                        verb = "にタッチ" if direction_up else "割れ"
+                        msg = f"{config['name']} {crossed:.0f}{config['unit']}{verb}{tail}"
                     else:
-                        if direction_up:
-                            subject = f"【価格アラート】{config['name']} 上昇 {crossed:,.0f}{config['unit']}を突破"
-                        else:
-                            subject = f"【価格アラート】{config['name']} 下落 {crossed:,.0f}{config['unit']}を割り込む"
-
-                    send_email(subject, subject)
-                    print(f"[SENT] {subject}")
-                    notified = True
+                        direction = "上昇" if direction_up else "下落"
+                        verb = "を突破" if direction_up else "を割り込む"
+                        msg = f"{config['name']} {direction} {crossed:,.0f}{config['unit']}{verb}{tail}"
+                    msgs.append(msg)
+                    print(f"[ALERT] {msg}")
 
             state[prev_key] = current_band
 
@@ -213,79 +220,11 @@ def check_price_alerts(state):
             print(f"[ERROR] {symbol}: {e}")
             fetch_errors.append(config["name"])
 
-    return notified, fetch_errors
-
-
-def check_delta_alerts(state):
-    """値幅アラート：前日終値比で閾値を超えるごとに通知"""
-    notified = False
-    today = datetime.now(JST).strftime("%Y-%m-%d")
-
-    for symbol, config in SYMBOLS.items():
-        if skip_symbol(symbol):
-            continue
-        try:
-            price = get_price(symbol)
-            prev_close = get_prev_close(symbol)
-            if price is None or prev_close is None:
-                continue
-
-            delta = price - prev_close
-            abs_delta = abs(delta)
-            sign = "down" if delta < 0 else "up"
-            move_label = "下げ幅" if delta < 0 else "上げ幅"
-            price_label = "安" if delta < 0 else "高"
-
-            steps = int(abs_delta / config["threshold"])
-            for i in range(1, steps + 1):
-                step_val = config["threshold"] * i
-                key = f"delta_{symbol}_{sign}_{step_val}_{today}"
-                if key not in state:
-                    now_str = datetime.now(JST).strftime("%H時%M分")
-                    subject = (
-                        f"【価格アラート】{config['name']} "
-                        f"{move_label} {step_val:,}{config['unit']}超"
-                    )
-                    body = (
-                        f"{subject} {now_str} "
-                        f"{abs_delta:,.0f}{config['unit']}{price_label}の"
-                        f"{price:,.0f}{config['unit']}"
-                    )
-                    send_email(subject, body)
-                    state[key] = datetime.now(timezone.utc).isoformat()
-                    print(f"[SENT] {body}")
-                    notified = True
-
-        except Exception as e:
-            print(f"[ERROR] delta {symbol}: {e}")
-
-    return notified
-
-
-def notify_fetch_errors(state, fetch_errors):
-    if not fetch_errors:
-        return
-    key = f"fetch_error_{datetime.now(JST).strftime('%Y-%m-%d_%H')}"
-    if key in state:
-        return
-    now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
-    body = (
-        f"【監視エラー】以下のシンボルのデータ取得に失敗しました。\n\n"
-        + "\n".join(f"  ・{e}" for e in fetch_errors)
-        + f"\n\n（{now} JST）\n"
-        "GitHub Actions の logs/ フォルダを確認してください。"
-    )
-    subject = f"【監視エラー】データ取得失敗 {len(fetch_errors)}件"
-    try:
-        send_email(subject, body)
-        state[key] = datetime.now(timezone.utc).isoformat()
-        print(f"[SENT] エラーメール: {fetch_errors}")
-    except Exception as e:
-        print(f"[ERROR] エラーメール送信失敗: {e}")
+    return msgs, fetch_errors
 
 
 def check_circuit_breakers(state):
-    notified = False
+    msgs = []
     for symbol, config in CIRCUIT_BREAKERS.items():
         if skip_symbol(symbol):
             continue
@@ -299,68 +238,30 @@ def check_circuit_breakers(state):
             print(f"[INFO] CB check {config['name']}: 前日比{pct:+.2f}%")
 
             for thresh in config["thresholds"]:
-                triggered = False
-                if thresh["direction"] == "both" and abs(pct) >= thresh["pct"]:
-                    triggered = True
-                elif thresh["direction"] == "down" and pct <= -thresh["pct"]:
-                    triggered = True
-
+                triggered = (
+                    thresh["direction"] == "both" and abs(pct) >= thresh["pct"]
+                    or thresh["direction"] == "down" and pct <= -thresh["pct"]
+                )
                 if triggered:
                     key = f"cb_{symbol}_{thresh['pct']}"
                     if should_notify(state, key):
-                        now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
                         direction = "上昇" if pct > 0 else "下落"
-                        body = (
-                            f"【CB警告】{config['name']} {thresh['label']}発動の可能性。"
-                            f"前日比{pct:+.1f}%（{direction}）"
-                            f"現在値：{price:,.0f}{config['unit']}（{now} JST）"
+                        msg = (
+                            f"【CB警告】{config['name']} {thresh['label']}発動の可能性"
+                            f"（前日比{pct:+.1f}% {direction} → {price:,.0f}{config['unit']}）"
                         )
-                        subject = f"【CB警告】{config['name']} {thresh['label']}"
-                        send_email(subject, body)
                         update_state(state, key)
-                        print(f"[SENT] {body}")
-                        notified = True
+                        msgs.append(msg)
+                        print(f"[ALERT] {msg}")
 
         except Exception as e:
             print(f"[ERROR] CB {symbol}: {e}")
 
-    return notified
-
-
-def check_milestones(state):
-    notified = False
-    for symbol, config in MILESTONES.items():
-        if skip_symbol(symbol):
-            continue
-        try:
-            price = get_price(symbol)
-            if price is None:
-                continue
-
-            level = get_band(price, config["threshold"])
-            print(f"[INFO] 大台チェック {config['name']}: {price:,.0f} (大台={level:,})")
-
-            key = f"milestone_{symbol}_{level}"
-            if should_notify(state, key):
-                now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
-                body = (
-                    f"【大台突破】{config['name']}が{level:,}{config['unit']}台に到達！"
-                    f"現在値：{price:,.0f}{config['unit']}（{now} JST）"
-                )
-                subject = f"【大台突破】{config['name']} {level:,}{config['unit']}台"
-                send_email(subject, body)
-                update_state(state, key)
-                print(f"[SENT] {body}")
-                notified = True
-
-        except Exception as e:
-            print(f"[ERROR] milestone {symbol}: {e}")
-
-    return notified
+    return msgs
 
 
 def check_intraday_range(state):
-    notified = False
+    msgs = []
     today = datetime.now(JST).strftime("%Y-%m-%d")
     tse_open = is_tse_open()
 
@@ -404,38 +305,66 @@ def check_intraday_range(state):
                 if range_val >= thresh:
                     key = f"range_{symbol}_{thresh}_{today}_{suffix}"
                     if should_notify(state, key):
-                        now = datetime.now(JST).strftime("%H:%M")
-                        body = (
-                            f"【値幅アラート】{config['name']}{label}の値幅が{thresh:,}{config['unit']}超え。"
-                            f"{range_desc}（値幅{range_val:,.0f}{config['unit']}）"
-                            f"（{now} JST）"
+                        msg = (
+                            f"【値幅】{config['name']}{label} {thresh:,}{config['unit']}超"
+                            f"（{range_desc}）"
                         )
-                        subject = f"【値幅アラート】{config['name']}{label} 値幅{thresh:,}{config['unit']}超え"
-                        send_email(subject, body)
                         update_state(state, key)
-                        print(f"[SENT] {body}")
-                        notified = True
+                        msgs.append(msg)
+                        print(f"[ALERT] {msg}")
 
         except Exception as e:
             print(f"[ERROR] range {symbol}: {e}")
 
-    return notified
+    return msgs
+
+
+def notify_fetch_errors(state, fetch_errors):
+    if not fetch_errors:
+        return
+    key = f"fetch_error_{datetime.now(JST).strftime('%Y-%m-%d_%H')}"
+    if key in state:
+        return
+    now = datetime.now(JST).strftime("%Y/%m/%d %H:%M")
+    body = (
+        f"【監視エラー】以下のシンボルのデータ取得に失敗しました。\n\n"
+        + "\n".join(f"  ・{e}" for e in fetch_errors)
+        + f"\n\n（{now} JST）\n"
+        "GitHub Actions の logs/ フォルダを確認してください。"
+    )
+    subject = f"【監視エラー】データ取得失敗 {len(fetch_errors)}件"
+    try:
+        send_email(subject, body)
+        state[key] = datetime.now(timezone.utc).isoformat()
+        print(f"[SENT] エラーメール: {fetch_errors}")
+    except Exception as e:
+        print(f"[ERROR] エラーメール送信失敗: {e}")
 
 
 def main():
     state = load_state()
 
-    a, fetch_errors = check_price_alerts(state)
-    b = check_delta_alerts(state)
-    c = check_circuit_breakers(state)
-    d = check_milestones(state)
-    e = check_intraday_range(state)
+    price_msgs, fetch_errors = check_price_alerts(state)
+    cb_msgs = check_circuit_breakers(state)
+    range_msgs = check_intraday_range(state)
 
     notify_fetch_errors(state, fetch_errors)
-
     save_state(state)
 
-    if not any([a, b, c, d, e]):
+    all_msgs = price_msgs + cb_msgs + range_msgs
+    if all_msgs:
+        now_str = datetime.now(JST).strftime("%Y/%m/%d %H:%M JST")
+        if len(all_msgs) == 1:
+            subject = f"【アラート】{all_msgs[0]}"
+        else:
+            subject = f"【アラート {len(all_msgs)}件】{all_msgs[0]}"
+        body = "\n".join(f"・{m}" for m in all_msgs) + f"\n\n{now_str}"
+        try:
+            send_email(subject, body)
+            print(f"[SENT] {subject}")
+        except Exception as e:
+            print(f"[ERROR] メール送信失敗: {e}")
+    else:
         print("[INFO] アラートなし")
 
 
