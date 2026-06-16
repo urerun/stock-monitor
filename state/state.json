@@ -41,5 +41,6 @@
   "futures_base_NKD=F_2026-06-12": 66575.0,
   "range_USDJPY=X_1_2026-06-12_cash": "2026-06-11T21:11:23.518386+00:00",
   "futures_base_NKD=F_2026-06-13": 67290.0,
-  "futures_base_NKD=F_2026-06-16": 69820.0
+  "futures_base_NKD=F_2026-06-16": 69820.0,
+  "band_prev_^N225": 69000
 }
