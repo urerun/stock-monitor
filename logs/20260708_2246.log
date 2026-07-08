@@ -1,0 +1,14 @@
+Failed to get ticker 'NKD=F' reason: Failed to perform, curl: (60) SSL: no alternative certificate subject name matches target hostname 'fc.yahoo.com'. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+[SKIP] 日経平均: 時間外
+[ERROR] NKD=F: Failed to perform, curl: (60) SSL: no alternative certificate subject name matches target hostname 'fc.yahoo.com'. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+[INFO] ドル円: 162.58円 (前日比+0.49円)
+[INFO] ダウ平均: 52,337ドル (前日比-588ドル)
+[INFO] NASDAQ総合指数: 25,868ポイント (前日比+50ポイント)
+[INFO] 上海総合指数: 3,971ポイント (前日比-19ポイント)
+[INFO] CB check 日経平均先物: 前日比-0.05%
+[INFO] CB check ダウ平均: 前日比-1.11%
+[INFO] CB check NASDAQ総合指数: 前日比+0.19%
+[INFO] 値幅 日経平均（先物）: 760円
+[INFO] 値幅 ドル円: 0円
+[SENT] エラーメール: ['日経平均先物']
+[INFO] アラートなし
