@@ -1,0 +1,13 @@
+[SKIP] 日経平均: 時間外
+[ERROR] NKD=F: Too Many Requests. Rate limited. Try after a while.
+[INFO] ドル円: 159.25円 (前日比-0.17円)
+[INFO] ダウ平均: 53,734ドル (前日比-106ドル)
+[INFO] NASDAQ総合指数: 26,731ポイント (前日比-72ポイント)
+[INFO] 上海総合指数: 3,983ポイント (前日比+56ポイント)
+[INFO] CB check 日経平均先物: 前日比+0.65%
+[INFO] CB check ダウ平均: 前日比-0.20%
+[INFO] CB check NASDAQ総合指数: 前日比-0.27%
+[INFO] 値幅 日経平均（先物）: 470円
+[INFO] 値幅 ドル円: 1円
+[SENT] エラーメール: ['日経平均先物']
+[INFO] アラートなし
