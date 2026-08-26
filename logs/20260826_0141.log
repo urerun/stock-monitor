@@ -1,0 +1,14 @@
+$000001.SS: possibly delisted; no price data found  (period=1d)
+[INFO] 日経平均: 65,520円 (前日比-337円)
+[SKIP] 日経平均先物: 時間外
+[INFO] ドル円: 159.09円 (前日比-0.05円)
+[INFO] ダウ平均: 53,573ドル (前日比+156ドル)
+[INFO] NASDAQ総合指数: 26,145ポイント (前日比+165ポイント)
+[SKIP] 000001.SS: データ取得失敗
+[INFO] CB check 日経平均: 前日比-0.51%
+[INFO] CB check ダウ平均: 前日比+0.29%
+[INFO] CB check NASDAQ総合指数: 前日比+0.64%
+[INFO] 値幅 日経平均（現物）: 352円
+[INFO] 値幅 ドル円: 0円
+[SENT] エラーメール: ['上海総合指数']
+[INFO] アラートなし
