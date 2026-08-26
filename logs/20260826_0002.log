@@ -1,0 +1,15 @@
+$^N225: possibly delisted; no price data found  (period=1d)
+$^N225: possibly delisted; no price data found  (period=1d)
+[SKIP] ^N225: データ取得失敗
+[SKIP] 日経平均先物: 時間外
+[INFO] ドル円: 159.23円 (前日比+0.09円)
+[INFO] ダウ平均: 53,573ドル (前日比+156ドル)
+[INFO] NASDAQ総合指数: 26,145ポイント (前日比+165ポイント)
+[INFO] 上海総合指数: 3,889ポイント (前日比+7ポイント)
+[INFO] CB check ダウ平均: 前日比+0.29%
+[INFO] CB check NASDAQ総合指数: 前日比+0.64%
+[INFO] 値幅 日経平均（現物）: 1,295円
+[ALERT] 【値幅】日経平均（現物） 1,000円超（高値65,904／安値64,609）
+[INFO] 値幅 ドル円: 0円
+[SENT] エラーメール: ['日経平均']
+[SENT] 【アラート】【値幅】日経平均（現物） 1,000円超（高値65,904／安値64,609）
