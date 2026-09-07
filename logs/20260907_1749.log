@@ -1,0 +1,15 @@
+$NKD=F: possibly delisted; no price data found  (period=1d)
+$NKD=F: possibly delisted; no price data found  (period=1d)
+$NKD=F: possibly delisted; no price data found  (period=1d)
+[SKIP] 日経平均: 時間外
+[SKIP] NKD=F: データ取得失敗
+[INFO] ドル円: 154.37円 (前日比-1.29円)
+[INFO] ダウ平均: 53,407ドル (前日比-279ドル)
+[INFO] NASDAQ総合指数: 26,505ポイント (前日比-79ポイント)
+[INFO] 上海総合指数: 3,933ポイント (前日比+3ポイント)
+[INFO] CB check ダウ平均: 前日比-0.52%
+[INFO] CB check NASDAQ総合指数: 前日比-0.30%
+[INFO] 値幅 ドル円: 2円
+[ALERT] 【値幅】ドル円 1円超（高値156／安値154）
+[SENT] エラーメール: ['日経平均先物']
+[SENT] 【アラート】【値幅】ドル円 1円超（高値156／安値154）
