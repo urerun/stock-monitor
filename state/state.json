@@ -10,7 +10,7 @@
   "futures_base_NKD=F_2026-05-28": 65190.0,
   "band_prev_NKD=F": 63000,
   "band_prev_USDJPY=X": 155,
-  "band_prev_^DJI": 51000,
+  "band_prev_^DJI": 52000,
   "band_prev_^IXIC": 25000,
   "band_prev_000001.SS": 3600,
   "futures_base_NKD=F_2026-05-29": 65815.0,
@@ -370,5 +370,6 @@
   "range_^N225_2000_2026-10-30_futures": "2026-10-30T11:33:42.697463+00:00",
   "futures_base_NKD=F_2026-10-31": 62390.0,
   "range_^N225_1000_2026-10-31_cash": "2026-10-31T00:54:21.128191+00:00",
-  "futures_base_NKD=F_2026-11-02": 63300.0
+  "futures_base_NKD=F_2026-11-02": 63300.0,
+  "futures_base_NKD=F_2026-11-03": 63060.0
 }
